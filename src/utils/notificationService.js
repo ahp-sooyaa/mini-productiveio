@@ -11,14 +11,11 @@ import supabase from './supabaseClient'
  * @returns {Promise} - The result of the database operation
  */
 export const createNotification = async (notification) => {
+  console.log('notification', notification)
   const { data, error } = await supabase
     .from('Notifications')
-    .insert([{
-      ...notification,
-      read: false
-    }])
-    .select()
-  
+    .insert([notification])
+
   if (error) {
     console.error('Error creating notification:', error)
     throw error

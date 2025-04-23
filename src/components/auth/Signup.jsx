@@ -1,106 +1,120 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router';
-import { useAuth } from '../../contexts/AuthContext';
+import {useState} from 'react';
+import {Link, useNavigate} from 'react-router';
+import {useAuth} from '../../contexts/AuthContext';
+import {useForm} from "react-hook-form";
+import {z} from "zod";
+import {Form, FormControl, FormField, FormItem, FormLabel, FormMessage} from "@/components/ui/form.jsx";
+import {Input} from "@/components/ui/input.jsx";
+import {Button} from "@/components/ui/button.jsx";
+import {zodResolver} from "@hookform/resolvers/zod";
 
 function Signup() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const { signUp } = useAuth();
-  const navigate = useNavigate();
+    const [error, setError] = useState('');
+    const [message, setMessage] = useState('');
+    const {signUp} = useAuth();
+    const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setMessage('');
-    setLoading(true);
+    const signupSchema = z.object({
+        email: z.string().email({ message: "Invalid email address" }),
+        password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
+        confirmPassword: z.string()
+    }).refine((data) => data.password === data.confirmPassword, {
+        message: "Passwords do not match",
+        path: ["confirmPassword"]
+    });
 
-    // Validate password
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
+    const form = useForm({
+        resolver: zodResolver(signupSchema),
+        defaultValues: {
+            email: "",
+            password: "",
+            confirmPassword: ""
+        }
+    });
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      setLoading(false);
-      return;
-    }
+    const onSubmit = async (formData) => {
+        setError('');
+        setMessage('');
 
-    try {
-      const { data, error } = await signUp(email, password);
-      
-      if (error) throw error;
-      
-      setMessage('Registration successful! Please check your email for verification.');
-      setTimeout(() => navigate('/login'), 3000);
-    } catch (error) {
-      setError(error.message || 'Failed to create an account');
-    } finally {
-      setLoading(false);
-    }
-  };
+        try {
+            await signUp(formData.email, formData.password);
 
-  return (
-    <div className="flex justify-center items-center min-h-screen p-5 bg-gray-100">
-      <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold text-center mb-6">Sign Up</h2>
-        {error && <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 rounded-md">{error}</div>}
-        {message && <div className="p-3 mb-4 text-sm text-green-700 bg-green-100 rounded-md">{message}</div>}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <label htmlFor="email" className="block font-medium text-gray-700">Email</label>
-            <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="password" className="block font-medium text-gray-700">Password</label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="confirm-password" className="block font-medium text-gray-700">Confirm Password</label>
-            <input
-              type="password"
-              id="confirm-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-          </div>
-          <button 
-            type="submit" 
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50" 
-            disabled={loading}
-          >
-            {loading ? 'Signing up...' : 'Sign Up'}
-          </button>
-        </form>
-        <div className="mt-6 text-center">
-          <p className="text-gray-600">
-            Already have an account? <Link to="/login" className="text-blue-600 hover:text-blue-800">Login</Link>
-          </p>
+            setMessage('Registration successful! Please check your email for verification.');
+            setTimeout(() => navigate('/login'), 3000);
+        } catch (error) {
+            setError(error.message || 'Failed to create an account');
+        }
+    };
+
+    return (
+        <div className="flex justify-center items-center min-h-screen p-5 bg-gray-100">
+            <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-md">
+                <h2 className="text-2xl font-bold text-center mb-6">Sign Up</h2>
+                {error && <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 rounded-md">{error}</div>}
+                {message && <div className="p-3 mb-4 text-sm text-green-700 bg-green-100 rounded-md">{message}</div>}
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                        <FormField
+                            control={form.control}
+                            name="email"
+                            render={({field}) => (
+                                <FormItem>
+                                    <FormLabel>Email</FormLabel>
+                                    <FormControl>
+                                        <Input type="text" placeholder="enter email addresss" {...field}/>
+                                    </FormControl>
+                                    <FormMessage/>
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="password"
+                            render={({field}) => (
+                                <FormItem>
+                                    <FormLabel>Password</FormLabel>
+                                    <FormControl>
+                                        <Input type="password" placeholder="enter your password" {...field}/>
+                                    </FormControl>
+                                    <FormMessage/>
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="confirmPassword"
+                            render={({field}) => (
+                                <FormItem>
+                                    <FormLabel>Confirm Password</FormLabel>
+                                    <FormControl>
+                                        <Input type="password" placeholder="enter your confirm password" {...field}/>
+                                    </FormControl>
+                                    <FormMessage/>
+                                </FormItem>
+                            )}
+                        />
+                        <Button
+                            type="submit"
+                            className="w-full"
+                            disabled={form.formState.isSubmitting}
+                        >
+                            {form.formState.isSubmitting ? 'Signing up' : 'Signup'}
+                        </Button>
+                    </form>
+                </Form>
+                <div className="mt-3 text-center">
+                    <p className="text-primary hover:text-primary/90 text-sm">
+                        Already have an account?
+                        <Button asChild variant="link" className="px-0 ml-1">
+                            <Link to="/login">
+                                Login
+                            </Link>
+                        </Button>
+                    </p>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 }
 
 export default Signup;

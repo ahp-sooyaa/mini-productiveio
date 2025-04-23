@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import {useEffect, useState} from 'react'
+import {useQuery} from '@tanstack/react-query'
 import supabase from '../utils/supabaseClient'
-import { useAuth } from '../contexts/AuthContext'
+import {useAuth} from '../contexts/AuthContext'
 
-export default function Notifications() {
+function Notifications() {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [showNotifications, setShowNotifications] = useState(false)
@@ -192,3 +192,5 @@ export default function Notifications() {
     </div>
   )
 }
+
+export default Notifications;
