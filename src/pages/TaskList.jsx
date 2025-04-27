@@ -27,6 +27,9 @@ function TaskList() {
         defaultValues: {
             name: '',
             description: '',
+            project_id: '',
+            status_id: '',
+            assigned_to: '',
         }
     })
 
@@ -124,6 +127,21 @@ function TaskList() {
         },
         onError: (error, context) => {
             queryClient.setQueryData(['tasks'], context.previousTasks)
+        },
+        onSuccess: () => {
+            // Reset form after successful submission
+            // Keep the default status_id if it exists
+            const defaultStatus = statuses && statuses.length > 0 ? statuses[0].id : '';
+            
+            form.reset({
+                name: '',
+                description: '',
+                project_id: '',
+                status_id: defaultStatus,
+                assigned_to: ''
+            });
+            
+            console.log('Form reset after successful task creation');
         },
         onSettled: () => {
             queryClient.invalidateQueries({queryKey: ['tasks']})

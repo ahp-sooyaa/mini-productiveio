@@ -179,7 +179,7 @@ export default function Task() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ['tasks']})
-            navigate('/')
+            navigate('/tasks')
         },
         onError: (error) => {
             console.error('Error deleting task:', error)
@@ -344,6 +344,7 @@ export default function Task() {
                             )}
                         />
                         <Button type="submit">{updateTaskMutation.isPending ? 'Updating...' : 'Update'}</Button>
+                        <Button variant="destructive" onClick={handleDelete} className="ml-5" type="button" disabled={deleteTaskMutation.isPending}>{deleteTaskMutation.isPending ? 'Deleting...' : 'Delete'}</Button>
                     </form>
                 </Form>
             </section>
