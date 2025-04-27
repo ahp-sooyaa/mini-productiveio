@@ -10,7 +10,7 @@ import {Form, FormControl, FormField, FormItem, FormLabel, FormMessage} from "@/
 import {Input} from "@/components/ui/input.jsx";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select.jsx";
 import {Button} from "@/components/ui/button.jsx";
-import {useEffect} from "react";
+import {useEffect, useState} from "react";
 import CommentForm from "@/components/CommentForm.jsx";
 
 export default function Task() {
@@ -19,30 +19,54 @@ export default function Task() {
     const navigate = useNavigate()
     const queryClient = useQueryClient()
 
-    const schema = z.object({
-        title: z.string(),
-        status: z.string(),
-        project: z.string(),
-        assignee_id: z.string().uuid().optional(),
-    });
+    // Query to fetch statuses
+    const {data: statuses, isLoading: isLoadingStatuses} = useQuery({
+        queryKey: ['statuses'],
+        queryFn: async () => {
+            const {data, error} = await supabase
+                .from('statuses')
+                .select()
 
-    const form = useForm({
-        resolver: zodResolver(schema),
-        defaultValue: {
-            title: z.string(),
-            status: z.string(),
-            project: z.string(),
-            assignee_id: z.string().uuid().optional(),
+            if (error) throw error
+            return data
+        }
+    })
+
+    // Query to fetch projects
+    const {data: projects, isLoading: isLoadingProjects} = useQuery({
+        queryKey: ['projects'],
+        queryFn: async () => {
+            console.log("Starting projects query (with delay)..."); // Optional log
+
+            // --- Start Delay ---
+            // Create a promise that resolves after 10000 milliseconds (10 seconds)
+            await new Promise(resolve => setTimeout(resolve, 10000)); 
+            // --- End Delay ---
+
+            console.log("Fetching projects data from Supabase..."); // Optional log
+
+            // Fetch the actual data after the delay
+            const {data, error} = await supabase
+                .from('projects')
+                .select()
+
+            if (error) {
+                console.error("Error fetching projects:", error); // Log errors
+                throw error;
+            }
+            
+            console.log("Projects data fetched successfully."); // Optional log
+            return data;
         }
     })
 
     // Query to fetch users
-    const {isLoading: usersIsLoading, error: usersError, data: users} = useQuery({
+    const {isLoading: isLoadingUsers, data: users} = useQuery({
         queryKey: ['users'],
         queryFn: async () => {
             const {data, error} = await supabase
                 .from('profiles')
-                .select('*')
+                .select()
 
             if (error) throw error
             return data
@@ -50,12 +74,12 @@ export default function Task() {
     })
 
     // Query to fetch the specific task
-    const {isLoading: taskIsLoading, error: taskError, data: task} = useQuery({
+    const {isLoading: isLoadingTask, error: taskError, data: task} = useQuery({
         queryKey: ['task', id],
         queryFn: async () => {
             const {data, error} = await supabase
-                .from('Tasks')
-                .select('*')
+                .from('tasks')
+                .select()
                 .eq('id', id)
                 .maybeSingle()
 
@@ -65,17 +89,42 @@ export default function Task() {
         enabled: !!id // Only run query when id is available
     })
 
-    // Reset form when task is loaded
-    useEffect(() => {
-        if (task) {
-            form.reset({
-                title: task.title ?? undefined,
-                status: task.status ?? undefined,
-                project: task.project ?? undefined,
-                assignee_id: task.assignee_id ?? undefined,
-            });
+    const schema = z.object({
+        name: z.string().trim().min(1, {message: 'Task title is required.'}),
+        description: z.string().trim(),
+        project_id: z.string({message: 'Project is required.'}),
+        status_id: z.string({message: 'Status is required.'}),
+        assigned_to: z.string().optional(),
+    });
+
+    const form = useForm({
+        resolver: zodResolver(schema),
+        defaultValue: {
+            name: '',
+            description: '',
+            project_id: '',
+            status_id: '',
+            assigned_to: '',
         }
-    }, [task, form]);
+    })
+
+    const [isFormLoading, setIsFormLoading] = useState(true);
+
+    useEffect(() => {
+        console.log('running useEffect() in TaskDetail.jsx')
+        if (isFormLoading && task) {
+            const formData = {
+                name: task.name || '',
+                description: task.description || '',
+                project_id: task.project_id || '',
+                status_id: task.status_id || '',
+                assigned_to: task.assigned_to || '',
+            };
+            console.log("Attempting form reset with:", formData);
+            form.reset(formData);
+            setIsFormLoading(false);
+        }
+    }, [task, statuses, users, form, isFormLoading]); // Ensure ALL data sources + reset are here
 
     // Mutation to update the task
     const updateTaskMutation = useMutation({
@@ -86,7 +135,7 @@ export default function Task() {
         },
         mutationFn: async (updatedTask) => {
             const response = await supabase
-                .from('Tasks')
+                .from('tasks')
                 .update(updatedTask)
                 .eq('id', id)
 
@@ -121,12 +170,12 @@ export default function Task() {
     const deleteTaskMutation = useMutation({
         mutationFn: async () => {
             const {data, error} = await supabase
-                .from('Tasks')
+                .from('tasks')
                 .delete()
                 .eq('id', id)
                 .select();
             if (error) throw error;
-            return true;
+            return data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: ['tasks']})
@@ -144,11 +193,13 @@ export default function Task() {
     }
 
     // Handle form submission
-    const updateFormHandler = (values) => {
+    const onSubmit = (values) => {
         updateTaskMutation.mutate(values)
     }
 
     if (taskError) return <div className="error">Error: {taskError.message}</div>
+    if (isFormLoading) return <div>Loading task detail...</div>
+    console.log("Task object in render:", task)
 
     return (
         <div className="max-w-6xl mx-auto px-4 py-8">
@@ -158,99 +209,143 @@ export default function Task() {
 
             <section className="bg-white p-6 rounded-lg shadow-md mb-8">
                 <h2 className="text-2xl font-bold mb-6">Edit Task</h2>
-                {taskIsLoading || usersIsLoading ? (
-                    <div>Loading...</div>
-                ) : (
-                    <Form {...form}>
-                        <form onSubmit={form.handleSubmit(updateFormHandler)} className="space-y-6">
-                            <FormField
-                                name="title"
-                                control={form.control}
-                                render={({field}) => (
-                                    <FormItem>
-                                        <FormLabel>Task Title</FormLabel>
-                                        <FormControl key={form.watch('title')}>
-                                            <Input type="text" {...field} />
-                                        </FormControl>
-                                        <FormMessage/>
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="status"
-                                render={({field}) => (
-                                    <FormItem>
-                                        <FormLabel>Status</FormLabel>
-                                        <Select key={form.watch('status')} onValueChange={field.onChange} value={field.value}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select status"/>
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="To Do">To Do</SelectItem>
-                                                <SelectItem value="In Progress">In Progress</SelectItem>
-                                                <SelectItem value="Completed">Completed</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage/>
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                name="project"
-                                control={form.control}
-                                render={({field}) => (
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                        <FormField
+                            control={form.control}
+                            name="project_id" // Correct field name?
+                            render={({field}) => {
+                                // Add log here: Check the value react-hook-form thinks it has
+                                console.log(`Rendering project_id Select. Field value:`, field.value);
+
+                                return (
                                     <FormItem>
                                         <FormLabel>Project</FormLabel>
-                                        <FormControl key={form.watch('project')}>
-                                            <Input type="text" {...field} />
-                                        </FormControl>
-                                        <FormMessage/>
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="assignee_id"
-                                render={({field}) => (
-                                    <FormItem>
-                                        <FormLabel>Assignee</FormLabel>
                                         <Select
-                                            key={form.watch('assignee_id')}
-                                            onValueChange={field.onChange}
+                                            // Crucial: Ensure the Select gets the value from RHF
+                                            // Use ?? '' to handle potential initial undefined/null safely
                                             value={field.value}
+                                            onValueChange={field.onChange}
+                                            disabled={isLoadingProjects}
+                                            // defaultValue={field.value ?? ''} // defaultValue is less critical here if value is used
                                         >
                                             <FormControl>
                                                 <SelectTrigger>
-                                                    <SelectValue placeholder="Select assignee"/>
+                                                    <SelectValue placeholder={isLoadingProjects ? 'Loading...' : 'Select Project'}/>
                                                 </SelectTrigger>
                                             </FormControl>
                                             <SelectContent>
-                                                {users?.map((user) => (
-                                                    <SelectItem key={user.id} value={user.id}>
-                                                        {user.name || 'anonymous'}
-                                                    </SelectItem>
-                                                ))}
+                                                {/* Ensure 'projects' data is actually available here */}
+                                                {/* Ensure 'project.id' type matches 'field.value' type */}
+                                                {projects && projects.length > 0 ? (
+                                                    projects.map(project => (
+                                                        <SelectItem
+                                                            key={project.id}
+                                                            // Ensure this value prop EXACTLY matches potential field.value
+                                                            value={project.id} // Or String(project.id) if needed
+                                                        >
+                                                            {project.name}
+                                                        </SelectItem>
+                                                    ))
+                                                ) : (
+                                                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                                                )}
+                                                {/* Maybe add an explicit 'None' option if applicable */}
+                                                {/* <SelectItem value="">None</SelectItem> */}
                                             </SelectContent>
                                         </Select>
                                         <FormMessage/>
                                     </FormItem>
-                                )}
-                            />
-                            <Button type="submit"
-                                    disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? 'Updating...' : 'Update Task'}</Button>
-                            <Button onClick={handleDelete}
-                                    disabled={deleteTaskMutation.isPending}
-                                    className="ml-2"
-                                    variant="destructive"
-                            >
-                                {deleteTaskMutation.isPending ? 'Deleting...' : 'Delete Task'}
-                            </Button>
-                        </form>
-                    </Form>
-                )}
+                                );
+                            }}
+                        />
+                        <FormField
+                            name="name"
+                            control={form.control}
+                            render={({field}) => (
+                                <FormItem>
+                                    <FormLabel>Task Title</FormLabel>
+                                    <FormControl>
+                                        <Input type="text" {...field} value={field.value ?? ''}/>
+                                    </FormControl>
+                                    <FormMessage/>
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            name="description"
+                            control={form.control}
+                            render={({field}) => (
+                                <FormItem>
+                                    <FormLabel>Task Description</FormLabel>
+                                    <FormControl>
+                                        <Input type="text" {...field} value={field.value ?? ''}/>
+                                    </FormControl>
+                                    <FormMessage/>
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            name="status_id"
+                            control={form.control}
+                            render={({field}) => (
+                                <FormItem>
+                                    <FormLabel>Status</FormLabel>
+                                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select status"/>
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {
+                                                statuses && statuses.length > 0
+                                                    ? (statuses.map(status => (
+                                                            <SelectItem key={status.id}
+                                                                        value={status.id}>{status.name}</SelectItem>
+                                                        ))
+                                                    ) : (
+                                                        <SelectItem value="none">No statuses found</SelectItem>
+                                                    )
+                                            }
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage/>
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            name="assigned_to"
+                            control={form.control}
+                            render={({field}) => (
+                                <FormItem>
+                                    <FormLabel>Assignee</FormLabel>
+                                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select Assignee"/>
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {
+                                                users && users.length > 0
+                                                    ? (users.map(user => (
+                                                            <SelectItem key={user.id}
+                                                                        value={user.id}>{user.display_name}</SelectItem>
+                                                        ))
+                                                    ) : (
+                                                        <SelectItem value="none">No users found</SelectItem>
+                                                    )
+                                            }
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage/>
+                                </FormItem>
+                            )}
+                        />
+                        <Button type="submit">{updateTaskMutation.isPending ? 'Updating...' : 'Update'}</Button>
+                    </form>
+                </Form>
             </section>
 
             <section className="bg-white p-6 rounded-lg shadow-md mb-8">

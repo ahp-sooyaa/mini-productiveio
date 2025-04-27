@@ -16,9 +16,9 @@ function Notifications() {
     queryKey: ['notifications', currentUserId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('Notifications')
-        .select('*, profiles:creator_id(name)')
-        .eq('user_id', currentUserId)
+        .from('notifications')
+        .select('*, profiles:actor_id(display_name)')
+        .eq('notifier_id', currentUserId)
         .order('created_at', { ascending: false })
         .limit(20)
       
@@ -30,7 +30,7 @@ function Notifications() {
     }
   })
   
-  // Set up realtime subscription
+  // Set up a realtime subscription
   useEffect(() => {
     // Subscribe to changes in the Notifications table
     const subscription = supabase
@@ -38,16 +38,16 @@ function Notifications() {
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
-        table: 'Notifications',
+        table: 'notifications',
         filter: `user_id=eq.${currentUserId}`
       }, (payload) => {
         // Fetch the user info for the new notification
         const fetchUserInfo = async () => {
-          if (payload.new && payload.new.creator_id) {
+          if (payload.new && payload.new.actor_id) {
             const { data } = await supabase
               .from('profiles')
               .select('name')
-              .eq('id', payload.new.creator_id)
+              .eq('id', payload.new.actor_id)
               .single()
             
             const newNotification = {
@@ -83,7 +83,7 @@ function Notifications() {
   // Mark notification as read
   const markAsRead = async (notificationId) => {
     const { error } = await supabase
-      .from('Notifications')
+      .from('notifications')
       .update({ read: true })
       .eq('id', notificationId)
     

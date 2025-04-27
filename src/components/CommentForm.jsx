@@ -11,7 +11,6 @@ export default function CommentForm({ task }) {
     const { user } = useAuth()
     const currentUserId = user.id
     const queryClient = useQueryClient()
-    console.log('task', task)
 
     // Query to fetch comments for the task with user data
     const {isLoading, error, data} = useQuery({
@@ -19,13 +18,13 @@ export default function CommentForm({ task }) {
         queryFn: async () => {
             // Using Supabase's join capability to get comments with user data
             const {data, error} = await supabase
-                .from('Comments')
+                .from('feed')
                 .select(`
                     id,
                     content,
                     created_at,
                     user_id,
-                    profiles:user_id (id, name, avatar_url)
+                    profiles:user_id (id, display_name)
                 `)
                 .eq('task_id', task.id)
                 .order('created_at', {ascending: false})
@@ -33,22 +32,21 @@ export default function CommentForm({ task }) {
             if (error) throw error
             return data
         },
-        enabled: !!task.id // Only run query when id is available
+        enabled: !!task.id
     })
 
     const addCommentMutation = useMutation({
         mutationFn: async (newComment) => {
             const { data, error } = await supabase
-                .from('Comments')
+                .from('comments')
                 .insert([newComment])
 
             if (error) throw error
             return data
         },
         onSuccess: () => {
-            // Invalidate and refetch comments query
             queryClient.invalidateQueries({ queryKey: ['comments', task.id] })
-            setContent('') // Clear the form
+            setContent('')
 
             const users = [task.user_id];
 
@@ -73,7 +71,6 @@ export default function CommentForm({ task }) {
     const handleSubmit = (e) => {
         e.preventDefault()
         if (!content.trim()) return
-        console.log('task id', task.id)
         const newComment = {
             task_id: task.id,
             user_id: currentUserId,

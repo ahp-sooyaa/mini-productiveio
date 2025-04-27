@@ -84,6 +84,28 @@ CREATE TABLE statuses (
     updated_at TIMESTAMP DEFAULT now()
 );
 
+ALTER TABLE statuses ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow authenticated users to insert statuses"
+    ON statuses
+    FOR INSERT
+    WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Allow authenticated users to select statuses"
+    ON statuses
+    FOR SELECT
+    USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Allow authenticated users to update statuses"
+    ON statuses
+    FOR UPDATE
+    USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Allow task creators to delete their statuses"
+    ON statuses
+    FOR DELETE
+    USING (auth.uid() IS NOT NULL);
+
 -- 4. Tasks Table
 CREATE TABLE tasks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
